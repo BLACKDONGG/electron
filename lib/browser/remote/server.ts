@@ -4,7 +4,7 @@ import * as electron from 'electron';
 import { EventEmitter } from 'events';
 import objectsRegistry from './objects-registry';
 import { ipcMainInternal } from '../ipc-main-internal';
-import { isPromise, isSerializableObject } from '@electron/internal/common/type-utils';
+import { isPromise, isSerializableObject, deserialize } from '@electron/internal/common/type-utils';
 import { Size } from 'electron/main';
 
 const v8Util = process.electronBinding('v8_util');
@@ -263,27 +263,14 @@ const fakeConstructor = (constructor: Function, name: string) =>
 const unwrapArgs = function (sender: electron.WebContents, frameId: number, contextId: string, args: any[]) {
   const metaToValue = function (meta: MetaTypeFromRenderer): any {
     switch (meta.type) {
-      case 'nativeimage': {
-        const image = electron.nativeImage.createEmpty();
-        for (const rep of meta.value) {
-          const { buffer, size, scaleFactor } = rep;
-          image.addRepresentation({
-            buffer,
-            width: size.width,
-            height: size.height,
-            scaleFactor
-          });
-        }
-        return image;
-      }
+      case 'nativeimage':
       case 'value':
-        return meta.value;
+      case 'buffer':
+        return deserialize(meta.value);
       case 'remote-object':
         return objectsRegistry.get(meta.id);
       case 'array':
         return unwrapArgs(sender, frameId, contextId, meta.value);
-      case 'buffer':
-        return Buffer.from(meta.value.buffer, meta.value.byteOffset, meta.value.byteLength);
       case 'promise':
         return Promise.resolve({
           then: metaToValue(meta.then)
